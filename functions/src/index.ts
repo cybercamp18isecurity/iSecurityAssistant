@@ -1,68 +1,88 @@
 import * as functions from 'firebase-functions';
 
-
-//Web fetching 
-
-import * as request from 'request';
-
 //Google Assistant deps
-import { dialogflow, SimpleResponse, BasicCard, Button, Image } from "actions-on-google";
+import { dialogflow, SimpleResponse, BasicCard, Button, Image, BrowseCarousel, BrowseCarouselItem } from "actions-on-google";
+import {getStatus, getUsers, getDevices} from "./networking"
+import {getCarouselDevices, getCarouselUsers} from "./carouselProcess"
+import {concatDevices, concatUsers} from "./utils"
+
 const app = dialogflow({debug: true});
-
-
 //Export Cloud Functions
 export const fulfillment = functions.https.onRequest(app)
 
 
-// function doRequest(options) {
-//     return new Promise(function (resolve, reject) {
-//       request(options, function (error, res, body) {
-//         if (!error && res.statusCode == 200) {
-//           resolve(JSON.parse(body));
-//         } else {
-//           reject(error);
-//         }
-//       });
-//     });
-//   }
-
-
-async function getStatus() {
-    // const options = {
-    //     url: '',
-    //     headers: {
-    //       'User-Agent': 'request'
-    //     }
-    // };
-    //const list = await doRequest(options)
-
-    return {
-        title: "Estado correcto",
-        description: "No hay ningún problema con la empresa, todo está correcto",
-        img: "https://2.bp.blogspot.com/-iKEIPiGJRHk/Vx6iFC6B3cI/AAAAAAAAJ_E/M6D-4bPquqwGSobih7g2_62_7dc_0IibwCK4B/s320/Ok.jpg"
-    }
-}
-
+/**
+ * Get the security sumamry information
+ * @param {DialogflowConversation} conv DialogflowConversation instance
+ * @return {void}
+ */
 app.intent('Get Security Status', async (conv) => {
-
     // Get the data
-    const data = await getStatus();
-
-    console.log("data: " + data)
+    const status = await getStatus();
 
     // Text or Speech Response
-    conv.close(new SimpleResponse({ 
+    conv.ask(new SimpleResponse({ 
         text: `Estado empresa`,
-        speech: `${data.description}`,
+        speech: `${status.description}`,
     }));
 
     // Card Response
-    conv.close(new BasicCard({
-        title: `Problemas con la conexión`,
+    conv.ask(new BasicCard({
+        title: `${status.title}`,
         image: new Image({ 
-            url: `${data.img}`,
+            url: `${status.img}`,
             alt: 'Status report' 
         }),
-        text: `${data.description}`
+        text: `${status.description}`
     }));
 });
+
+/**
+ * Retrieve the users
+ * @param {DialogflowConversation} conv DialogflowConversation instance
+ * @return {void}
+ */
+app.intent('Get Users', async (conv) => {
+    const users = await getUsers();
+    const usersCarrousel = getCarouselUsers(users)
+    const hasScreen = conv.surface.capabilities.has('actions.capability.SCREEN_OUTPUT');
+
+    conv.ask(new SimpleResponse({
+        speech: 'Estos son tus usuarios',
+        text: 'Estos son tus usuarios:',
+      }));
+
+    if(hasScreen){
+        conv.ask(new BrowseCarousel({
+            items: usersCarrousel
+        }))
+    } else {
+        conv.ask(concatUsers(...users))
+    }
+})
+
+/**
+ * Retrieve the devices
+ * @param {DialogflowConversation} conv DialogflowConversation instance
+ * @return {void}
+ */
+app.intent('Get Devices', async (conv) => {
+    const devices = await getDevices();
+    const devicesCarousel = getCarouselDevices(devices)
+    const hasScreen = conv.surface.capabilities.has('actions.capability.SCREEN_OUTPUT');
+
+    conv.ask(new SimpleResponse({
+        speech: 'Estos son tus dispositivos',
+        text: 'Estos son tus dispositivos:',
+    }));
+
+    if(hasScreen){
+        conv.ask(new BrowseCarousel({
+            items: devicesCarousel
+        }))
+    } else {
+        conv.ask(concatDevices(...devices))
+    }
+})
+
+
